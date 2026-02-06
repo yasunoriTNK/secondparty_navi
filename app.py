@@ -12,7 +12,7 @@ import streamlit as st
 # =========================
 # Settings / Constants
 # =========================
-APP_TITLE = "Shibuya Re:balance Navi（2次会一発予約）"
+APP_TITLE = "Shibuya Re:balance Navi"
 
 # デモ用の現在地（渋谷駅付近）
 DEFAULT_LAT = 35.6580
@@ -185,7 +185,7 @@ def arrival_selectbox_index(current_min: int) -> int:
 # =========================
 def page_search(restaurants: List[Restaurant]):
     st.markdown("### 検索条件設定")
-    st.caption("入社1年目でも迷わない。2次会を “一発で予約” まで。")
+    st.caption("2次会を "一発で予約”")
 
     # 人数
     st.markdown('<div class="label">人数</div>', unsafe_allow_html=True)
