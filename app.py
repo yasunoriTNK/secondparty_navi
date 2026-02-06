@@ -14,18 +14,24 @@ import streamlit as st
 # =========================
 APP_TITLE = "Shibuya Re:balance Navi（2次会一発予約）"
 
-# 渋谷駅あたり（デモ用の現在地固定）
+# デモ用の現在地（渋谷駅付近）
 DEFAULT_LAT = 35.6580
 DEFAULT_LON = 139.7016
 
 DATA_PATH = Path(__file__).parent / "data" / "restaurants.json"
 
+# 表示ラベル -> 到着までの分
 ARRIVAL_OPTIONS = [
     ("今すぐ", 0),
     ("15分後", 15),
     ("30分後", 30),
     ("60分後", 60),
 ]
+ARRIVAL_LABELS = [x[0] for x in ARRIVAL_OPTIONS]
+ARRIVAL_LABEL_TO_MIN = {label: minutes for label, minutes in ARRIVAL_OPTIONS}
+ARRIVAL_MIN_TO_LABEL = {minutes: label for label, minutes in ARRIVAL_OPTIONS}
+
+PEOPLE_OPTIONS = [None, 1, 2, 3, 4, 5, 6, 7, 8]  # None は未選択
 
 
 # =========================
@@ -63,27 +69,27 @@ class Restaurant:
     @staticmethod
     def from_dict(d: Dict[str, Any]) -> "Restaurant":
         return Restaurant(
-            id=d["id"],
-            name=d["name"],
-            area=d.get("area", ""),
+            id=str(d.get("id", "")),
+            name=str(d.get("name", "")),
+            area=str(d.get("area", "")),
             genre=list(d.get("genre", [])),
             price_yen=int(d.get("price_yen", 0)),
             rating=float(d.get("rating", 0.0)),
-            smoking=d.get("smoking", "no"),
+            smoking=str(d.get("smoking", "no")),
             capacity=int(d.get("capacity", 0)),
             lat=float(d.get("lat", 0.0)),
             lon=float(d.get("lon", 0.0)),
-            photo_url=d.get("photo_url", ""),
-            address=d.get("address", ""),
-            open=d.get("open", ""),
+            photo_url=str(d.get("photo_url", "")),
+            address=str(d.get("address", "")),
+            open=str(d.get("open", "")),
             fee_yen=int(d.get("fee_yen", 0)),
-            description=d.get("description", ""),
+            description=str(d.get("description", "")),
         )
 
 
+@st.cache_data(show_spinner=False)
 def load_restaurants() -> List[Restaurant]:
     if not DATA_PATH.exists():
-        st.error(f"データが見つかりません: {DATA_PATH}")
         return []
     raw = json.loads(DATA_PATH.read_text(encoding="utf-8"))
     return [Restaurant.from_dict(x) for x in raw]
@@ -99,12 +105,12 @@ def yen(n: int) -> str:
 
 def init_state():
     st.session_state.setdefault("page", "search")  # search | results | detail | done
-    st.session_state.setdefault("people", None)  # int
+    st.session_state.setdefault("people", None)  # int | None
     st.session_state.setdefault("smoking", "either")  # no | yes | separated | either
     st.session_state.setdefault("arrival_min", 0)  # 0/15/30/60
     st.session_state.setdefault("selected_restaurant_id", None)
     st.session_state.setdefault("view_mode", "list")  # list | map
-    st.session_state.setdefault("last_results", [])  # list[restaurant_id]
+    st.session_state.setdefault("last_results", [])  # list[str]
     st.session_state.setdefault("user_lat", DEFAULT_LAT)
     st.session_state.setdefault("user_lon", DEFAULT_LON)
 
@@ -120,10 +126,8 @@ def inject_css():
     st.markdown(
         """
 <style>
-/* 全体の余白をスマホっぽく */
 .block-container { padding-top: 1.2rem; padding-bottom: 2rem; max-width: 520px; }
 
-/* “カード” */
 .card {
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.06);
@@ -132,7 +136,6 @@ def inject_css():
   margin-bottom: 12px;
 }
 
-/* 主要ボタンの高さ */
 .stButton > button {
   width: 100%;
   height: 48px;
@@ -140,23 +143,8 @@ def inject_css():
   font-weight: 700;
 }
 
-/* 小さめボタン */
-.btn-sm .stButton > button { height: 40px; border-radius: 12px; font-weight: 700; }
+.label { font-size: 12px; color: rgba(229,231,235,0.75); margin-bottom: 6px; }
 
-/* セグメントっぽく見せる */
-.seg {
-  display:flex; gap:8px;
-}
-.seg .stButton{ flex:1; }
-
-/* ラベル */
-.label {
-  font-size: 12px;
-  color: rgba(229,231,235,0.75);
-  margin-bottom: 6px;
-}
-
-/* チップ */
 .chip {
   display:inline-block;
   padding: 4px 10px;
@@ -167,15 +155,9 @@ def inject_css():
   font-size: 12px;
   margin-right: 6px;
 }
-.meta {
-  color: rgba(229,231,235,0.75);
-  font-size: 12px;
-}
-.title {
-  font-size: 18px;
-  font-weight: 800;
-  margin-bottom: 4px;
-}
+
+.meta { color: rgba(229,231,235,0.75); font-size: 12px; }
+.title { font-size: 18px; font-weight: 800; margin-bottom: 4px; }
 .hr { height:1px; background: rgba(255,255,255,0.06); margin: 10px 0; }
 .small { font-size: 12px; color: rgba(229,231,235,0.70); }
 </style>
@@ -184,20 +166,34 @@ def inject_css():
     )
 
 
+def people_selectbox_index(current_people: Optional[int]) -> int:
+    """people の session_state が壊れていても落ちない index"""
+    try:
+        return PEOPLE_OPTIONS.index(current_people)
+    except ValueError:
+        return 0  # None
+
+
+def arrival_selectbox_index(current_min: int) -> int:
+    """arrival_min が想定外でも落ちない index"""
+    label = ARRIVAL_MIN_TO_LABEL.get(int(current_min), "今すぐ")
+    return ARRIVAL_LABELS.index(label)
+
+
 # =========================
 # Pages
 # =========================
 def page_search(restaurants: List[Restaurant]):
-    st.markdown(f"### 検索条件設定")
+    st.markdown("### 検索条件設定")
     st.caption("入社1年目でも迷わない。2次会を “一発で予約” まで。")
 
     # 人数
     st.markdown('<div class="label">人数</div>', unsafe_allow_html=True)
     people = st.selectbox(
         "人数を選択",
-        options=[None, 1, 2, 3, 4, 5, 6, 7, 8],
+        options=PEOPLE_OPTIONS,
+        index=people_selectbox_index(st.session_state.people),
         format_func=lambda x: "人数を選択" if x is None else f"{x}名",
-        index=0 if st.session_state.people is None else [None,1,2,3,4,5,6,7,8].index(st.session_state.people),
         label_visibility="collapsed",
     )
     st.session_state.people = people
@@ -215,21 +211,22 @@ def page_search(restaurants: List[Restaurant]):
         if st.button("どちらでも", use_container_width=True):
             st.session_state.smoking = "either"
 
-    st.markdown(
-        f'<div class="small">現在: <b>{ "禁煙" if st.session_state.smoking=="no" else "喫煙" if st.session_state.smoking=="yes" else "どちらでも" }</b></div>',
-        unsafe_allow_html=True,
+    current_smoke = (
+        "禁煙" if st.session_state.smoking == "no"
+        else "喫煙" if st.session_state.smoking == "yes"
+        else "どちらでも"
     )
+    st.markdown(f"<div class='small'>現在: <b>{current_smoke}</b></div>", unsafe_allow_html=True)
 
     # 来店時間
     st.markdown('<div class="label">来店時間</div>', unsafe_allow_html=True)
-    arrival_label = next(x[0] for x in ARRIVAL_OPTIONS if x[1] == st.session_state.arrival_min)
-    chosen = st.selectbox(
+    chosen_label = st.selectbox(
         "来店時間を選択",
-        options=[x[0] for x in ARRIVAL_OPTIONS],
-        index=[x[0] for x in ARRIVAL_OPTIONS].index(arrival_label),
+        options=ARRIVAL_LABELS,
+        index=arrival_selectbox_index(st.session_state.arrival_min),
         label_visibility="collapsed",
     )
-    st.session_state.arrival_min = dict(ARRIVAL_OPTIONS)[chosen]
+    st.session_state.arrival_min = ARRIVAL_LABEL_TO_MIN[chosen_label]
 
     st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
@@ -251,16 +248,19 @@ def filter_and_rank(restaurants: List[Restaurant]) -> pd.DataFrame:
     for r in restaurants:
         if r.capacity < people:
             continue
+
+        # 喫煙フィルタ（デモ：禁煙は no のみ、喫煙は no 以外を許容、どちらでもは全許容）
         if smoking != "either":
-            # 禁煙なら no のみ。喫煙なら yes/separated を許容…等、運用で調整
             if smoking == "no" and r.smoking != "no":
                 continue
             if smoking == "yes" and r.smoking == "no":
                 continue
 
         dist_km = haversine_km(user_lat, user_lon, r.lat, r.lon)
-        # 超簡易スコア：近さ + 評価
+
+        # 超簡易スコア：評価 + 近さ（近いほど加点）
         score = (r.rating * 2.0) - (dist_km * 1.2)
+
         rows.append(
             {
                 "id": r.id,
@@ -282,8 +282,7 @@ def filter_and_rank(restaurants: List[Restaurant]) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     if df.empty:
         return df
-    df = df.sort_values(["score", "rating"], ascending=False).reset_index(drop=True)
-    return df
+    return df.sort_values(["score", "rating"], ascending=False).reset_index(drop=True)
 
 
 def results_header(df: pd.DataFrame):
@@ -291,10 +290,11 @@ def results_header(df: pd.DataFrame):
     smoking = st.session_state.smoking
     arrival_min = int(st.session_state.arrival_min)
 
-    chips = []
-    chips.append(f"{people}名以上")
-    chips.append("禁煙" if smoking == "no" else "喫煙" if smoking == "yes" else "喫煙どちらでも")
-    chips.append("今すぐ" if arrival_min == 0 else f"{arrival_min}分後")
+    chips = [
+        f"{people}名以上",
+        "禁煙" if smoking == "no" else "喫煙" if smoking == "yes" else "喫煙どちらでも",
+        "今すぐ" if arrival_min == 0 else f"{arrival_min}分後",
+    ]
 
     st.markdown("### 検索結果")
     st.markdown("".join([f"<span class='chip'>{c}</span>" for c in chips]), unsafe_allow_html=True)
@@ -311,11 +311,12 @@ def results_header(df: pd.DataFrame):
 
 
 def card_restaurant(row: pd.Series):
-    dist_m = int(row["distance_km"] * 1000)
+    dist_m = int(float(row["distance_km"]) * 1000)
+
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     st.markdown(f"<div class='title'>{row['name']}</div>", unsafe_allow_html=True)
     st.markdown(
-        f"<div class='meta'>⭐ {row['rating']:.1f}　・ {row['genre']}　・ 予算 {yen(int(row['price_yen']))}〜</div>",
+        f"<div class='meta'>⭐ {float(row['rating']):.1f}　・ {row['genre']}　・ 予算 {yen(int(row['price_yen']))}〜</div>",
         unsafe_allow_html=True,
     )
     st.markdown(
@@ -326,7 +327,7 @@ def card_restaurant(row: pd.Series):
 
     c1, c2 = st.columns([1, 1])
     with c1:
-        if st.button(f"👀 詳細を見る", key=f"detail_{row['id']}"):
+        if st.button("👀 詳細を見る", key=f"detail_{row['id']}"):
             st.session_state.selected_restaurant_id = row["id"]
             goto("detail")
     with c2:
@@ -364,12 +365,19 @@ def render_map(df: pd.DataFrame):
     )
 
     tooltip = {"text": "{name}\n⭐{rating}\n約{distance_km}km"}
-    st.pydeck_chart(pdk.Deck(map_style=None, initial_view_state=view_state, layers=[layer], tooltip=tooltip))
+    st.pydeck_chart(
+        pdk.Deck(
+            map_style=None,
+            initial_view_state=view_state,
+            layers=[layer],
+            tooltip=tooltip,
+        )
+    )
 
-    # マップ下にも一覧を軽く
     st.markdown("#### 上位候補（タップで詳細）")
     for _, row in df.head(5).iterrows():
-        if st.button(f"{row['name']}（⭐{row['rating']:.1f} / 約{int(row['distance_km']*1000)}m）", key=f"pick_{row['id']}"):
+        dist_m = int(float(row["distance_km"]) * 1000)
+        if st.button(f"{row['name']}（⭐{float(row['rating']):.1f} / 約{dist_m}m）", key=f"pick_{row['id']}"):
             st.session_state.selected_restaurant_id = row["id"]
             goto("detail")
 
@@ -395,7 +403,9 @@ def page_results(restaurants: List[Restaurant]):
             card_restaurant(row)
 
 
-def get_restaurant_by_id(restaurants: List[Restaurant], rid: str) -> Optional[Restaurant]:
+def get_restaurant_by_id(restaurants: List[Restaurant], rid: Optional[str]) -> Optional[Restaurant]:
+    if not rid:
+        return None
     for r in restaurants:
         if r.id == rid:
             return r
@@ -403,8 +413,7 @@ def get_restaurant_by_id(restaurants: List[Restaurant], rid: str) -> Optional[Re
 
 
 def page_detail(restaurants: List[Restaurant]):
-    rid = st.session_state.selected_restaurant_id
-    r = get_restaurant_by_id(restaurants, rid) if rid else None
+    r = get_restaurant_by_id(restaurants, st.session_state.selected_restaurant_id)
     if not r:
         st.error("店舗が見つかりません。")
         if st.button("検索結果へ戻る"):
@@ -438,7 +447,8 @@ def page_detail(restaurants: List[Restaurant]):
         unsafe_allow_html=True,
     )
 
-    if st.button(f"⚡ この店を予約（{yen(r.fee_yen)}）" if r.fee_yen > 0 else "⚡ この店を予約", use_container_width=True):
+    btn_label = f"⚡ この店を予約（手数料 {yen(r.fee_yen)}）" if r.fee_yen > 0 else "⚡ この店を予約"
+    if st.button(btn_label, use_container_width=True):
         goto("done")
 
     c1, c2 = st.columns(2)
@@ -451,8 +461,7 @@ def page_detail(restaurants: List[Restaurant]):
 
 
 def page_done(restaurants: List[Restaurant]):
-    rid = st.session_state.selected_restaurant_id
-    r = get_restaurant_by_id(restaurants, rid) if rid else None
+    r = get_restaurant_by_id(restaurants, st.session_state.selected_restaurant_id)
     if not r:
         st.error("予約対象が見つかりません。")
         if st.button("検索へ戻る"):
@@ -476,12 +485,11 @@ def page_done(restaurants: List[Restaurant]):
     st.markdown(f"<div class='meta'>📍 住所：{r.address}</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # 道順（Google MapsのURL生成。Streamlitからリンク表示）
+    # Google Maps 道順リンク
     gmaps = f"https://www.google.com/maps/dir/?api=1&destination={r.lat},{r.lon}"
     st.link_button("🧭 お店への道順を表示", gmaps, use_container_width=True)
 
     if st.button("トップに戻る", use_container_width=True):
-        # 予約後の状態は残してもいいが、ここでは初期化寄りに戻す
         st.session_state.selected_restaurant_id = None
         goto("search")
 
@@ -495,17 +503,26 @@ def main():
     init_state()
 
     restaurants = load_restaurants()
+    if not restaurants:
+        st.error(f"店舗データが見つかりません: {DATA_PATH}")
+        st.stop()
 
-    # ヘッダー（アプリっぽく）
+    # ヘッダー
     st.markdown(f"## 🍻 {APP_TITLE}")
 
-    if st.session_state.page == "search":
+    page = st.session_state.page
+    if page == "search":
         page_search(restaurants)
-    elif st.session_state.page == "results":
+    elif page == "results":
+        # people が未選択のまま results に来た場合もガード
+        if st.session_state.people is None:
+            st.error("人数が未選択です。条件画面に戻ります。")
+            goto("search")
+            st.rerun()
         page_results(restaurants)
-    elif st.session_state.page == "detail":
+    elif page == "detail":
         page_detail(restaurants)
-    elif st.session_state.page == "done":
+    elif page == "done":
         page_done(restaurants)
     else:
         st.session_state.page = "search"
