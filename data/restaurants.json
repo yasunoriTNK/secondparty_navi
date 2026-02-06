@@ -1,0 +1,53 @@
+[
+  {
+    "id": "yakitori_ebisu",
+    "name": "道玄坂 炭火焼鳥 椿入",
+    "area": "渋谷",
+    "genre": ["焼鳥", "居酒屋"],
+    "price_yen": 4000,
+    "rating": 4.5,
+    "smoking": "separated",
+    "capacity": 18,
+    "lat": 35.6595,
+    "lon": 139.7006,
+    "photo_url": "",
+    "address": "東京都渋谷区道玄坂2-xx-xx",
+    "open": "17:00〜23:30（L.O. 23:00）",
+    "fee_yen": 1200,
+    "description": "2次会でも入りやすい炭火焼鳥。少人数〜中人数に強い。"
+  },
+  {
+    "id": "uokin_shibuya",
+    "name": "渋谷 魚金",
+    "area": "渋谷",
+    "genre": ["海鮮", "居酒屋"],
+    "price_yen": 4000,
+    "rating": 4.2,
+    "smoking": "no",
+    "capacity": 26,
+    "lat": 35.6612,
+    "lon": 139.6984,
+    "photo_url": "",
+    "address": "東京都渋谷区道玄坂1-2-3",
+    "open": "17:00〜23:00",
+    "fee_yen": 0,
+    "description": "魚が強い定番。サクッと予約して安心の2次会へ。"
+  },
+  {
+    "id": "bar_miyashita",
+    "name": "MIYASHITA Park Bar",
+    "area": "神宮前",
+    "genre": ["バー", "ダイニング"],
+    "price_yen": 5000,
+    "rating": 4.1,
+    "smoking": "no",
+    "capacity": 12,
+    "lat": 35.6690,
+    "lon": 139.7043,
+    "photo_url": "",
+    "address": "東京都渋谷区神宮前6-xx-xx",
+    "open": "18:00〜24:00",
+    "fee_yen": 800,
+    "description": "2次会の会話向き。雰囲気重視で選びたいときに。"
+  }
+]
