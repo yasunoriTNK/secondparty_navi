@@ -185,7 +185,7 @@ def arrival_selectbox_index(current_min: int) -> int:
 # =========================
 def page_search(restaurants: List[Restaurant]):
     st.markdown("### 検索条件設定")
-    st.caption("2次会を "一発で予約”")
+    st.caption("2次会を 「一発で予約」")
 
     # 人数
     st.markdown('<div class="label">人数</div>', unsafe_allow_html=True)
